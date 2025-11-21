@@ -1,30 +1,31 @@
+cmake_minimum_required(VERSION 3.16...3.22)
 project(platformthemeplugin)
+
 include(GNUInstallDirs)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_package(Qt5Core REQUIRED)
-find_package(Qt5Widgets REQUIRED)
-find_package(Qt5QuickControls2 REQUIRED)
-find_package(Qt5DBus REQUIRED)
-find_package(Qt5X11Extras REQUIRED)
-find_package(Qt5Gui CONFIG REQUIRED Private)
-find_package(Qt5XdgIconLoader REQUIRED)
-find_package(dbusmenu-qt5 REQUIRED)
-find_package(KF5WindowSystem REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(Qt6XdgIconLoader REQUIRED Qt6XdgIconLoader)
 
-# dependencies for QPA plugin
-find_package(Qt5ThemeSupport REQUIRED)
-set(QT5PLATFORMSUPPORT_LIBS Qt5ThemeSupport::Qt5ThemeSupport)
+# 分开查找 Qt6 模块
+find_package(Qt6Core REQUIRED)
+find_package(Qt6Widgets REQUIRED)
+find_package(Qt6Gui REQUIRED)
+find_package(Qt6DBus REQUIRED)
+find_package(Qt6QuickControls2 REQUIRED)
 
-# qdbusmenubar uses them
-remove_definitions(-DQT_NO_SIGNALS_SLOTS_KEYWORDS)
+# 分开查找 KDE Frameworks 6
+find_package(KF6WindowSystem REQUIRED)
 
-pkg_check_modules(XCB_EWMH REQUIRED xcb xcb-ewmh x11)
+# XCB 相关库
+pkg_check_modules(XCB REQUIRED xcb)
+pkg_check_modules(XCB_EWMH REQUIRED xcb-ewmh)
+pkg_check_modules(X11 REQUIRED x11)
 
-set (SRCS
+set(SRCS
     main.cpp
     platformtheme.h
     platformtheme.cpp
@@ -42,52 +43,63 @@ set (SRCS
     statusnotifier/statusnotifieritem.cpp
 )
 
-qt5_add_dbus_interface(SRCS org.kde.StatusNotifierWatcher.xml statusnotifierwatcher_interface)
-
-qt5_add_dbus_adaptor(SRCS
-    statusnotifier/org.kde.StatusNotifierItem.xml
-    statusnotifier/statusnotifieritem.h
-    StatusNotifierItem
-)
+# Qt6 DBus 接口生成
+if(TARGET Qt6::DBus)
+    qt6_add_dbus_interface(SRCS 
+        org.kde.StatusNotifierWatcher.xml 
+        statusnotifierwatcher_interface
+    )
+    
+    qt6_add_dbus_adaptor(SRCS
+        statusnotifier/org.kde.StatusNotifierItem.xml
+        statusnotifier/statusnotifieritem.h
+        StatusNotifierItem
+    )
+endif()
 
 add_library(cutefishplatformtheme MODULE ${SRCS})
 
-target_compile_definitions(cutefishplatformtheme
-    PRIVATE
-        "QT_NO_FOREACH"
-        "LIB_FM_QT_SONAME=\"${LIB_FM_QT_SONAME}\""
+# 只定义必要的、简单的宏
+target_compile_definitions(cutefishplatformtheme PRIVATE
+    "QT_NO_FOREACH"
+)
+
+target_include_directories(cutefishplatformtheme PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${XCB_INCLUDE_DIRS}
+    ${XCB_EWMH_INCLUDE_DIRS}
+    ${X11_INCLUDE_DIRS}
+    ${Qt6XdgIconLoader_INCLUDE_DIRS}
 )
 
 target_link_libraries(cutefishplatformtheme PRIVATE
-    Qt5::GuiPrivate
-    Qt5::X11Extras
-    Qt5::Widgets
-    Qt5::QuickControls2
-    Qt5::Core
-    Qt5::DBus
-    dbusmenu-qt5
-
-    Qt5XdgIconLoader
-
-    KF5::WindowSystem
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Gui
+    Qt6::DBus
+    Qt6::QuickControls2
+    Qt6::CorePrivate  # 这会自动处理私有头文件路径
+    Qt6::GuiPrivate   # 这会自动处理私有头文件路径
+    KF6::WindowSystem
     ${XCB_LIBRARIES}
-    ${QT5PLATFORMSUPPORT_LIBS}
+    ${XCB_EWMH_LIBRARIES}
+    ${X11_LIBRARIES}
+    ${Qt6XdgIconLoader_LIBRARIES}
 )
 
-get_target_property(QT_QMAKE_EXECUTABLE ${Qt5Core_QMAKE_EXECUTABLE} IMPORTED_LOCATION)
-if(NOT QT_QMAKE_EXECUTABLE)
-    message(FATAL_ERROR "qmake is not found.")
-endif()
+set_target_properties(cutefishplatformtheme PROPERTIES
+    PREFIX ""
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/platformthemes"
+)
 
-# execute the command "qmake -query QT_INSTALL_PLUGINS" to get the path of plugins dir.
-execute_process(COMMAND ${QT_QMAKE_EXECUTABLE} -query QT_INSTALL_PLUGINS
-    OUTPUT_VARIABLE QT_PLUGINS_DIR
+# 获取 Qt6 插件目录
+get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+execute_process(
+    COMMAND ${QT_QMAKE_EXECUTABLE} -query QT_INSTALL_PLUGINS
+    OUTPUT_VARIABLE QT6_PLUGINS_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-if(QT_PLUGINS_DIR)
-    message(STATUS "Qt5 plugin directory:" "${QT_PLUGINS_DIR}")
-else()
-    message(FATAL_ERROR "Qt5 plugin directory cannot be detected.")
-endif()
 
-install(TARGETS cutefishplatformtheme LIBRARY DESTINATION "${QT_PLUGINS_DIR}/platformthemes")
+install(TARGETS cutefishplatformtheme 
+    LIBRARY DESTINATION "${QT6_PLUGINS_DIR}/platformthemes"
+)

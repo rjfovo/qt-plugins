@@ -1,12 +1,15 @@
 #ifndef PLATFORMTHEME_H
 #define PLATFORMTHEME_H
 
+// Qt6 兼容的头文件包含
 #include <qpa/qplatformtheme.h>
 #include "hintsettings.h"
 #include "systemtrayicon.h"
 
 #include <QHash>
 #include <QKeySequence>
+#include <QObject>
+#include <QScopedPointer>
 
 class QIconEngine;
 class QWindow;

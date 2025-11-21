@@ -7,6 +7,7 @@
 #include <QVariant>
 #include <QSettings>
 
+// Qt6 中 QPA 头文件的新位置
 #include <qpa/qplatformtheme.h>
 
 class QPalette;

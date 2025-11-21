@@ -1,7 +1,7 @@
 #include <qpa/qplatformthemeplugin.h>
 #include "platformtheme.h"
 
-#include <private/xdgiconloader/xdgiconloader_p.h>
+#include <4.1.0/private/xdgiconloader/xdgiconloader_p.h>
 
 QT_BEGIN_NAMESPACE
 

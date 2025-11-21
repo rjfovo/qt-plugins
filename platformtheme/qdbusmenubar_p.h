@@ -55,10 +55,10 @@
 #include <QString>
 #include <QWindow>
 
-#include <QtThemeSupport/private/qdbusplatformmenu_p.h>
-#include <QtThemeSupport/private/qdbusmenuadaptor_p.h>
-#include <QtThemeSupport/private/qdbusmenuconnection_p.h>
-#include <QtThemeSupport/private/qdbusmenuregistrarproxy_p.h>
+#include <QtGui/private/qdbusplatformmenu_p.h>
+#include <QtGui/private/qdbusmenuadaptor_p.h>
+#include <QtGui/private/qdbusmenuconnection_p.h>
+#include <QtGui/private/qdbusmenuregistrarproxy_p.h>
 
 QT_BEGIN_NAMESPACE
 

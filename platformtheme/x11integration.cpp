@@ -1,27 +1,6 @@
-/*  This file is part of the KDE libraries
- *  Copyright 2015 Martin Gräßlin <mgraesslin@kde.org>
- *  Copyright 2016 Marco Martin <mart@kde.org>
- *
- *  This library is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License as published by
- *  the Free Software Foundation; either version 2 of the License or ( at
- *  your option ) version 3 or, at the discretion of KDE e.V. ( which shall
- *  act as a proxy as in section 14 of the GPLv3 ), any later version.
- *
- *  This library is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *  Library General Public License for more details.
- *
- *  You should have received a copy of the GNU Lesser General Public License
- *  along with this library; see the file COPYING.LIB.  If not, write to
- *  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- *  Boston, MA 02110-1301, USA.
- */
 #include "x11integration.h"
 
 #include <QCoreApplication>
-#include <QX11Info>
 #include <QPlatformSurfaceEvent>
 #include <QGuiApplication>
 #include <QWindow>
@@ -34,6 +13,12 @@
 #include <KWindowEffects>
 
 #include <xcb/xcb.h>
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <qpa/qplatformnativeinterface.h>
+#else
+#include <QX11Info>
+#endif
 
 static const char s_schemePropertyName[] = "KDE_COLOR_SCHEME_PATH";
 static const QByteArray s_blurBehindPropertyName = QByteArrayLiteral("ENABLE_BLUR_BEHIND_HINT");
@@ -58,7 +43,16 @@ bool X11Integration::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::Show && watched->inherits("QShapedPixmapWindow")) {
         //static cast should be safe there
         QWindow *w = static_cast<QWindow *>(watched);
+        
+        // 修复：使用 QPlatformNativeInterface 来获取 X11 连接和根窗口
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        auto native = qApp->platformNativeInterface();
+        auto *connection = static_cast<xcb_connection_t*>(native->nativeResourceForIntegration("connection"));
+        auto rootWindow = static_cast<xcb_window_t>(reinterpret_cast<quintptr>(native->nativeResourceForScreen("rootwindow", qApp->primaryScreen())));
+        NETWinInfo info(connection, w->winId(), rootWindow, NET::WMWindowType, NET::Properties2());
+#else
         NETWinInfo info(QX11Info::connection(), w->winId(), QX11Info::appRootWindow(), NET::WMWindowType, NET::Properties2());
+#endif
         info.setWindowType(NET::DNDIcon);
         // TODO: does this flash the xcb connection?
     }
@@ -103,13 +97,28 @@ void X11Integration::installDesktopFileName(QWindow *w)
     if (desktopFileName.endsWith(QLatin1String(".desktop"))) {
         desktopFileName.chop(8);
     }
+    
+    // 修复：使用 QPlatformNativeInterface 来获取 X11 连接和根窗口
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    auto native = qApp->platformNativeInterface();
+    auto *connection = static_cast<xcb_connection_t*>(native->nativeResourceForIntegration("connection"));
+    auto rootWindow = static_cast<xcb_window_t>(reinterpret_cast<quintptr>(native->nativeResourceForScreen("rootwindow", qApp->primaryScreen())));
+    NETWinInfo info(connection, w->winId(), rootWindow, NET::Properties(), NET::Properties2());
+#else
     NETWinInfo info(QX11Info::connection(), w->winId(), QX11Info::appRootWindow(), NET::Properties(), NET::Properties2());
+#endif
     info.setDesktopFileName(desktopFileName.toUtf8().constData());
 }
 
 void X11Integration::setWindowProperty(QWindow *window, const QByteArray &name, const QByteArray &value)
 {
+    // 修复：使用 QPlatformNativeInterface 来获取 X11 连接
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    auto native = qApp->platformNativeInterface();
+    auto *c = static_cast<xcb_connection_t*>(native->nativeResourceForIntegration("connection"));
+#else
     auto *c = QX11Info::connection();
+#endif
 
     xcb_atom_t atom;
     auto it = m_atoms.find(name);

@@ -19,6 +19,7 @@ find_package(Qt6QuickControls2 REQUIRED)
 
 # 分开查找 KDE Frameworks 6
 find_package(KF6WindowSystem REQUIRED)
+find_package(KF6StatusNotifierItem REQUIRED)
 
 # XCB 相关库
 pkg_check_modules(XCB REQUIRED xcb)
@@ -81,6 +82,7 @@ target_link_libraries(cutefishplatformtheme PRIVATE
     Qt6::CorePrivate  # 这会自动处理私有头文件路径
     Qt6::GuiPrivate   # 这会自动处理私有头文件路径
     KF6::WindowSystem
+    KF6::StatusNotifierItem
     ${XCB_LIBRARIES}
     ${XCB_EWMH_LIBRARIES}
     ${X11_LIBRARIES}

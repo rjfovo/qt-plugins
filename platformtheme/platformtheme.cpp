@@ -20,6 +20,7 @@
 
 // Qt DBus
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>  // 添加这行
 #include <QDBusInterface>
 
 #include <KWindowSystem>
@@ -31,7 +32,14 @@ static bool checkDBusGlobalMenuAvailable()
 {
     QDBusConnection connection = QDBusConnection::sessionBus();
     QString registrarService = QStringLiteral("com.canonical.AppMenu.Registrar");
-    return connection.interface()->isServiceRegistered(registrarService);
+    
+    // 修复：检查 interface() 是否为空指针
+    QDBusConnectionInterface *iface = connection.interface();
+    if (!iface) {
+        return false;
+    }
+    
+    return iface->isServiceRegistered(registrarService);
 }
 
 static bool isDBusGlobalMenuAvailable()

@@ -891,7 +891,16 @@ namespace Phantom
         {
             QRect ra = bar->rect;
             QRect rb = ra;
-            bool isHorizontal = bar->orientation != Qt::Vertical;
+            
+            // Qt6 修复：使用 state 判断方向而不是 orientation 成员
+            bool isHorizontal = true;
+            if (auto progressBar = qobject_cast<const QProgressBar*>(bar->styleObject)) {
+                isHorizontal = progressBar->orientation() == Qt::Horizontal;
+            } else {
+                // 回退方案：根据矩形形状判断
+                isHorizontal = bar->rect.width() >= bar->rect.height();
+            }
+            
             bool isInverted = bar->invertedAppearance;
             bool isIndeterminate = bar->minimum == 0 && bar->maximum == 0;
             bool isForward = !isHorizontal || bar->direction != Qt::RightToLeft;
@@ -2634,11 +2643,14 @@ void BaseStyle::drawControl(ControlElement element,
         QRect r = bar->rect.adjusted(2, 2, -2, -2);
         if (r.isEmpty() || !r.isValid())
             break;
-        QSize textSize = option->fontMetrics.size(Qt::TextBypassShaping, bar->text);
+        
+        // Qt6 修复：移除 TextBypassShaping
+        QSize textSize = option->fontMetrics.size(Qt::TextSingleLine, bar->text);
         QRect textRect = QStyle::alignedRect(option->direction, Qt::AlignCenter, textSize, option->rect);
         textRect &= r;
         if (textRect.isEmpty())
             break;
+        
         QRect filled, nonFilled;
         bool isIndeterminate = false;
         Ph::progressBarFillRects(bar, filled, nonFilled, isIndeterminate);
@@ -2706,19 +2718,14 @@ void BaseStyle::drawControl(ControlElement element,
         if (!menuItem)
             break;
         const auto metrics = Ph::MenuItemMetrics::ofFontHeight(option->fontMetrics.height());
-        // Draws one item in a popup menu.
+        
         if (menuItem->menuItemType == QStyleOptionMenuItem::Separator) {
-            // Phantom ignores text and icons in menu separators, because
-            // 1) The text and icons for separators don't render on Mac native menus
-            // 2) There doesn't seem to be a way to account for the width of the text
-            // properly (Fusion will often draw separator text clipped off)
-            // 3) Setting text on separators also seems to mess up the metrics for
-            // menu items on Mac native menus
             QRect r = option->rect;
             r.setHeight(r.height() / 2 + 1);
             Ph::fillRectEdges(painter, r, Qt::BottomEdge, 1, swatch.color(S_window_divider));
             break;
         }
+        
         const QRect itemRect = option->rect;
         painter->save();
         bool isSelected = menuItem->state & State_Selected && menuItem->state & State_Enabled;
@@ -2727,14 +2734,11 @@ void BaseStyle::drawControl(ControlElement element,
         bool isSunken = menuItem->state & State_Sunken;
         bool isEnabled = menuItem->state & State_Enabled;
         bool hasSubMenu = menuItem->menuItemType == QStyleOptionMenuItem::SubMenu;
+
         if (isSelected) {
-            // Swatchy fillColor = isSunken ? S_highlight_outline : S_highlight;
-            // painter->fillRect(option->rect, swatch.color(fillColor));
-            // rekols: Add rounded rectangle.
             qreal item_radius = Phantom::DefaultFrame_Radius / 2;
             painter->save();
             painter->setPen(Qt::NoPen);
-            // painter->setBrush(swatch.color(fillColor));
             painter->setBrush(swatch.color(S_button_on));
             painter->setOpacity(0.4);
             painter->setRenderHint(QPainter::Antialiasing);
@@ -2802,77 +2806,32 @@ void BaseStyle::drawControl(ControlElement element,
         }
 
         // Draw main text and mnemonic text
-        QStringRef s(&menuItem->text);
-        if (!s.isEmpty()) {
-            QRect textRect =
-                Ph::menuItemTextRect(metrics, option->direction, itemRect, hasSubMenu, hasIcon, menuItem->tabWidth);
-            int t = s.indexOf(QLatin1Char('\t'));
-            int text_flags =
-                Qt::AlignLeft | Qt::AlignTop | Qt::TextShowMnemonic | Qt::TextDontClip | Qt::TextSingleLine;
+        // Qt6 修复：使用 QString 而不是 QStringRef
+        QString text = menuItem->text;
+        if (!text.isEmpty()) {
+            // Qt6 修复：计算 tabWidth，因为 QStyleOptionMenuItem 不再有这个成员
+            int tabWidth = 0;
+            int t = text.indexOf(QLatin1Char('\t'));
+            if (t >= 0) {
+                QString tabText = text.mid(t + 1);
+                tabWidth = option->fontMetrics.horizontalAdvance(tabText);
+            }
+            
+            QRect textRect = Ph::menuItemTextRect(metrics, option->direction, itemRect, hasSubMenu, hasIcon, tabWidth);
+            int text_flags = Qt::AlignLeft | Qt::AlignTop | Qt::TextShowMnemonic | Qt::TextDontClip | Qt::TextSingleLine;
             if (!styleHint(SH_UnderlineShortcut, menuItem, widget))
                 text_flags |= Qt::TextHideMnemonic;
-#if 0
-                painter->save();
-#endif
-            painter->setPen(swatch.pen(isSelected ? S_text /*S_highlightedText*/ : S_text));
 
-            // My comment:
-            //
-            // What actually looks like is happening is that the qplatformtheme may
-            // have set a per-class font for menus. The QComboMenuDelegate sets the
-            // combo box's own font on the QStyleOptionMenuItem when passing it in
-            // here and when calling sizeFromContents with CT_MenuItem, but the
-            // QPainter we're called with hasn't had its font set to it -- it's still
-            // set to the QMenu/QMenuItem app fonts hash font. So if it's a menu
-            // coming from a combo box, let's just go ahead and set the font for it
-            // if it doesn't match, since that's probably what it wanted to do. I
-            // think. And as described above, we have to do the weird dance with the
-            // resolve mask... which is some internal Qt detail that we aren't
-            // supposed to have to deal with, but here we are.
-            //
-            // Ok, there's another problem, and QFusionStyle also suffers from it: in
-            // high DPI, setting the pointSizeF and setting the font again won't
-            // necessarily give us the right font (at least in Windows.) The font
-            // might have too thin of a weight, and probably other problems. So just
-            // forget about it: we'll have Phantom return 0 for the style hint that
-            // the combo box uses to determine if it should use a QMenu popup instead
-            // of a regular dropdown menu thing. The popup menu might actually be
-            // better for usability in some cases, and it's how combos work on Mac
-            // and BeOS, but it won't work anyway for editable combo boxes in Qt, and
-            // the font issues just make it not worth it. So we'll have a dropdown
-            // guy like a traditional Windows thing.
-            //
-            // If you want to try it out again, go to SH_ComboBox_Popup and have it
-            // return 1.
-            //
-            // Alternatively, we could instead have the CT_MenuItem handling code try
-            // to be aggressively clever and use the qt app font hash to look up the
-            // expected font for a QMenu and use that for calculating its metrics.
-            // Unfortunately, that probably won't work so great if the combo/menu
-            // actually wants to use custom fonts in its listing, since we'd be
-            // ignoring it. That's how UseQMenuForComboBoxPopup currently works,
-            // though it tests for Qt::WA_SetFont as an attempt at recognizing when
-            // it shouldn't use the qt font hash for QMenu.
-#if 0
-            if (qobject_cast<const QComboBox*>(widget)) {
-                QFont font = menuItem->font;
-                font.setPointSizeF(QFontInfo(menuItem->font).pointSizeF());
-                painter->setFont(font);
-            }
-#endif
+            painter->setPen(swatch.pen(isSelected ? S_text : S_text));
 
             // Draw mnemonic text
             if (t >= 0) {
-                QRect mnemonicR =
-                    Ph::menuItemMnemonicRect(metrics, option->direction, itemRect, hasSubMenu, menuItem->tabWidth);
-                const QStringRef textToDrawRef = s.mid(t + 1);
-                const QString unsafeTextToDraw = QString::fromRawData(textToDrawRef.constData(), textToDrawRef.size());
-                painter->drawText(mnemonicR, text_flags, unsafeTextToDraw);
-                s = s.left(t);
+                QRect mnemonicR = Ph::menuItemMnemonicRect(metrics, option->direction, itemRect, hasSubMenu, tabWidth);
+                QString textToDraw = text.mid(t + 1);
+                painter->drawText(mnemonicR, text_flags, textToDraw);
+                text = text.left(t);
             }
-            const QStringRef textToDrawRef = s.left(t);
-            const QString unsafeTextToDraw = QString::fromRawData(textToDrawRef.constData(), textToDrawRef.size());
-            painter->drawText(textRect, text_flags, unsafeTextToDraw);
+            painter->drawText(textRect, text_flags, text);
         }
 
         // SubMenu Arrow
@@ -4358,16 +4317,20 @@ QSize BaseStyle::sizeFromContents(ContentsType type,
         auto hdr = qstyleoption_cast<const QStyleOptionHeader*>(option);
         if (!hdr)
             break;
-        // This is pretty crummy. Should also check if we need multi-line support
-        // or not.
+        
         bool nullIcon = hdr->icon.isNull();
         int margin = proxy()->pixelMetric(QStyle::PM_HeaderMargin, hdr, widget);
         int iconSize = nullIcon ? 0 : option->fontMetrics.height();
-        QSize txt = hdr->fontMetrics.size(Qt::TextSingleLine | Qt::TextBypassShaping, hdr->text);
+        
+        // Qt6 修复：移除 Qt::TextBypassShaping
+        QSize txt = hdr->fontMetrics.size(Qt::TextSingleLine, hdr->text);
+        
         QSize sz;
         sz.setHeight(margin + qMax(iconSize, txt.height()) + margin);
         sz.setWidth((nullIcon ? 0 : margin) + iconSize + (hdr->text.isNull() ? 0 : margin) + txt.width() + margin);
-        if (hdr->sortIndicator != QStyleOptionHeader::None) {
+        
+        // Qt6 修复：使用强类型枚举
+        if (hdr->sortIndicator != QStyleOptionHeader::SortIndicator::None) {
             if (hdr->orientation == Qt::Horizontal)
                 sz.rwidth() += sz.height() + margin;
             else

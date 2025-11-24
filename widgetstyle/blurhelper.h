@@ -33,6 +33,8 @@
 
 #include <QObject>
 
+class QWidget;
+
 class BlurHelper : public QObject
 {
     Q_OBJECT

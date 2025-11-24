@@ -31,23 +31,19 @@
 
 #include "blurhelper.h"
 
-// KF5
+// KDE
 #include <KWindowEffects>
 
 // Qt
 #include <QWidget>
+#include <QWindow>
 #include <QScreen>
 #include <QRect>
 #include <QVariant>
 #include <QEvent>
 #include <QPainterPath>
 #include <QApplication>
-#include <QX11Info>
-
-// XCB
-#include <xcb/xcb.h>
-#include <xcb/shape.h>
-#include <xcb/xcb_icccm.h>
+#include <QGuiApplication>
 
 BlurHelper::BlurHelper(QObject *parent)
     : QObject(parent)
@@ -92,7 +88,6 @@ bool BlurHelper::eventFilter(QObject *object, QEvent *event)
     return false;
 }
 
-
 void BlurHelper::update(QWidget *widget) const
 {
     /*
@@ -102,10 +97,15 @@ void BlurHelper::update(QWidget *widget) const
     if (!(widget->testAttribute(Qt::WA_WState_Created) || widget->internalWinId()))
         return;
 
+    // 获取 QWindow 而不是 WId
+    QWindow *window = widget->window()->windowHandle();
+    if (!window)
+        return;
+
     if (widget->mask().isEmpty()) {
-        KWindowEffects::enableBlurBehind(widget->winId(), true);
+        KWindowEffects::enableBlurBehind(window, true);
     } else {
-        KWindowEffects::enableBlurBehind(widget->winId(), true, widget->mask());
+        KWindowEffects::enableBlurBehind(window, true, widget->mask());
     }
 
     // force update
@@ -119,35 +119,24 @@ void BlurHelper::enableBlurBehind(QWidget *widget, bool enable, qreal windowRadi
     if (!widget)
         return;
 
-    xcb_connection_t *c = QX11Info::connection();
-    if (!c)
+    // 获取 QWindow 而不是 WId
+    QWindow *window = widget->window()->windowHandle();
+    if (!window)
         return;
 
-    const QByteArray effectName = QByteArrayLiteral("_KDE_NET_WM_BLUR_BEHIND_REGION");
-    xcb_intern_atom_cookie_t atomCookie = xcb_intern_atom_unchecked(c, false, effectName.length(), effectName.constData());
-    QScopedPointer<xcb_intern_atom_reply_t, QScopedPointerPodDeleter> atom(xcb_intern_atom_reply(c, atomCookie, nullptr));
-    if (!atom)
-        return;
-
+    // 使用 KWindowEffects 作为主要方法
     if (enable) {
-        qreal devicePixelRatio = qApp->devicePixelRatio();
-        QPainterPath path;
-        path.addRoundedRect(QRectF(QPoint(0, 0), widget->size() * devicePixelRatio),
-                            windowRadius * devicePixelRatio,
-                            windowRadius * devicePixelRatio);
-        QVector<uint32_t> data;
-        for (const QPolygonF &polygon : path.toFillPolygons()) {
-            QRegion region = polygon.toPolygon();
-            for (auto i = region.begin(); i != region.end(); ++i) {
-                data << i->x() << i->y() << i->width() << i->height();
-            }
+        if (windowRadius > 0) {
+            qreal devicePixelRatio = widget->devicePixelRatioF();
+            QPainterPath path;
+            path.addRoundedRect(QRectF(QPoint(0, 0), widget->size() * devicePixelRatio),
+                                windowRadius * devicePixelRatio,
+                                windowRadius * devicePixelRatio);
+            KWindowEffects::enableBlurBehind(window, true, path.toFillPolygon().toPolygon());
+        } else {
+            KWindowEffects::enableBlurBehind(window, true);
         }
-
-        xcb_change_property(c, XCB_PROP_MODE_REPLACE, widget->winId(),
-                            atom->atom, XCB_ATOM_CARDINAL,
-                            32, data.size(), data.constData());
-
     } else {
-        xcb_delete_property(c, widget->winId(), atom->atom);
+        KWindowEffects::enableBlurBehind(window, false);
     }
 }

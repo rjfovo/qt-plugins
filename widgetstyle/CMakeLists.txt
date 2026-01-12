@@ -68,6 +68,9 @@ set_target_properties(${TARGET} PROPERTIES
 )
 
 # 使用 Qt6 的标准插件安装路径
+if (NOT QT6_PLUGINS_DIR)
+    set(QT6_PLUGINS_DIR "/usr/lib/x86_64-linux-gnu/qt6/plugins")
+endif()
 install(TARGETS ${TARGET} 
     DESTINATION "${QT6_PLUGINS_DIR}/styles"
 )

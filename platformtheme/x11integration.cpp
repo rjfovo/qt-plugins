@@ -115,10 +115,24 @@ void X11Integration::setWindowProperty(QWindow *window, const QByteArray &name, 
     // 修复：使用 QPlatformNativeInterface 来获取 X11 连接
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     auto native = qApp->platformNativeInterface();
+    if (!native) {
+        qWarning() << "X11Integration: QPlatformNativeInterface is null";
+        return;
+    }
     auto *c = static_cast<xcb_connection_t*>(native->nativeResourceForIntegration("connection"));
 #else
     auto *c = QX11Info::connection();
 #endif
+
+    if (!c) {
+        qWarning() << "X11Integration: XCB connection is null";
+        return;
+    }
+
+    if (!window || !window->handle()) {
+        qWarning() << "X11Integration: Window or window handle is null";
+        return;
+    }
 
     xcb_atom_t atom;
     auto it = m_atoms.find(name);
@@ -129,10 +143,16 @@ void X11Integration::setWindowProperty(QWindow *window, const QByteArray &name, 
             atom = reply->atom;
             m_atoms[name] = atom;
         } else {
+            qWarning() << "X11Integration: Failed to intern atom for" << name;
             return;
         }
     } else {
         atom = *it;
+    }
+
+    if (atom == XCB_ATOM_NONE) {
+        qWarning() << "X11Integration: Invalid atom for" << name;
+        return;
     }
 
     if (value.isEmpty()) {

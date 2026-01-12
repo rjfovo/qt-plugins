@@ -2,7 +2,7 @@
 #define PLATFORMTHEME_H
 
 // Qt6 兼容的头文件包含
-#include <qpa/qplatformtheme.h>
+#include <QtGui/qpa/qplatformtheme.h>
 #include "hintsettings.h"
 #include "systemtrayicon.h"
 
@@ -41,7 +41,6 @@ public:
 private:
     void onFontChanged();
     void onIconThemeChanged();
-    void setQtQuickControlsTheme();
 
 private:
     HintsSettings *m_hints;

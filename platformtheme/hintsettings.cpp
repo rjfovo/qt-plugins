@@ -16,9 +16,11 @@
 #include <QTemporaryFile>
 #include <qpa/qplatformdialoghelper.h>
 
+#ifdef QT_DBUS_LIB
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#endif
 
 static const QByteArray s_systemFontName = QByteArrayLiteral("Font");
 static const QByteArray s_systemFixedFontName = QByteArrayLiteral("FixedFont");

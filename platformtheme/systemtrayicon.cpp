@@ -240,10 +240,7 @@ SystemTrayIcon::SystemTrayIcon()
     : QPlatformSystemTrayIcon(),
     mSni(nullptr)
 {
-    // register types
-    qDBusRegisterMetaType<ToolTip>();
-    qDBusRegisterMetaType<IconPixmap>();
-    qDBusRegisterMetaType<IconPixmapList>();
+    // when using KF6 KStatusNotifierItem the DBus meta types are handled internally
 }
 
 SystemTrayIcon::~SystemTrayIcon()
@@ -254,7 +251,7 @@ void SystemTrayIcon::init()
 {
     if (!mSni)
     {
-        mSni = new StatusNotifierItem(QString::number(QCoreApplication::applicationPid()), this);
+        mSni = new KStatusNotifierItem(QString::number(QCoreApplication::applicationPid()), this);
         mSni->setTitle(QApplication::applicationDisplayName());
 
         // default menu
@@ -268,12 +265,15 @@ void SystemTrayIcon::init()
         menu->insertMenuItem(menuItem, nullptr);
         updateMenu(menu);
 
-        connect(mSni, &StatusNotifierItem::activateRequested, [this](const QPoint &)
+        connect(mSni, &KStatusNotifierItem::activateRequested, [this](bool active, const QPoint &)
         {
-            Q_EMIT activated(QPlatformSystemTrayIcon::Trigger);
+            if (active)
+                Q_EMIT activated(QPlatformSystemTrayIcon::Trigger);
+            else
+                Q_EMIT activated(QPlatformSystemTrayIcon::Unknown);
         });
 
-        connect(mSni, &StatusNotifierItem::secondaryActivateRequested, [this](const QPoint &)
+        connect(mSni, &KStatusNotifierItem::secondaryActivateRequested, [this](const QPoint &)
         {
             Q_EMIT activated(QPlatformSystemTrayIcon::MiddleClick);
         });

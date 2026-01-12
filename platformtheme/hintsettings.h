@@ -1,14 +1,16 @@
 #ifndef HINTSSETTINGS_H
 #define HINTSSETTINGS_H
 
+#ifdef QT_DBUS_LIB
 #include <QDBusVariant>
+#endif
 #include <QFileSystemWatcher>
 #include <QObject>
 #include <QVariant>
 #include <QSettings>
 
 // Qt6 中 QPA 头文件的新位置
-#include <qpa/qplatformtheme.h>
+#include <QtGui/qpa/qplatformtheme.h>
 
 class QPalette;
 class HintsSettings : public QObject

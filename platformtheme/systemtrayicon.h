@@ -28,10 +28,11 @@
 #ifndef SYSTEMTRAYICON_H
 #define SYSTEMTRAYICON_H
 
-#include <qpa/qplatformmenu.h>
-#include <qpa/qplatformsystemtrayicon.h>
+#include <QtGui/qpa/qplatformmenu.h>
+#include <QtGui/qpa/qplatformsystemtrayicon.h>
 
-#include "statusnotifier/statusnotifieritem.h"
+// Use KF6 KStatusNotifierItem when available
+#include <kstatusnotifieritem.h>
 
 class SystemTrayMenuItem;
 class QAction;
@@ -118,7 +119,7 @@ public:
     QPlatformMenu *createMenu() const Q_DECL_OVERRIDE;
 
 private:
-    StatusNotifierItem *mSni;
+    KStatusNotifierItem *mSni;
 };
 
 #endif

@@ -8,18 +8,18 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(Qt6XdgIconLoader REQUIRED Qt6XdgIconLoader)
 
 # 分开查找 Qt6 模块
 find_package(Qt6Core REQUIRED)
 find_package(Qt6Widgets REQUIRED)
 find_package(Qt6Gui REQUIRED)
-find_package(Qt6DBus REQUIRED)
-find_package(Qt6QuickControls2 REQUIRED)
+## DBus support: detect if available and link when present
+find_package(Qt6DBus QUIET)
 
-# 分开查找 KDE Frameworks 6
-find_package(KF6WindowSystem REQUIRED)
-find_package(KF6StatusNotifierItem REQUIRED)
+## KDE Frameworks optional for now
+# KF6 WindowSystem 和 StatusNotifierItem 可选，若存在则链接并启用宏
+find_package(KF6WindowSystem QUIET)
+find_package(KF6StatusNotifierItem QUIET)
 
 # XCB 相关库
 pkg_check_modules(XCB REQUIRED xcb)
@@ -32,31 +32,50 @@ set(SRCS
     platformtheme.cpp
     hintsettings.h
     hintsettings.cpp
-    systemtrayicon.h
-    systemtrayicon.cpp
-    qdbusmenubar_p.h
-    qdbusmenubar.cpp
     x11integration.h
     x11integration.cpp
-    statusnotifier/dbustypes.h
-    statusnotifier/dbustypes.cpp
-    statusnotifier/statusnotifieritem.h
-    statusnotifier/statusnotifieritem.cpp
+    # statusnotifier/dbustypes.h
+    # statusnotifier/dbustypes.cpp
+    # statusnotifier/statusnotifieritem.h
+    # statusnotifier/statusnotifieritem.cpp
+    # statusnotifier/statusnotifieritem.h
+    # statusnotifier/statusnotifieritem.cpp
 )
 
-# Qt6 DBus 接口生成
-if(TARGET Qt6::DBus)
-    qt6_add_dbus_interface(SRCS 
-        org.kde.StatusNotifierWatcher.xml 
-        statusnotifierwatcher_interface
+# Choose real systemtray implementation when KF6 StatusNotifierItem/WindowSystem are available,
+# otherwise fall back to a minimal stub to avoid adding a hard dependency during development.
+if(TARGET KF6::StatusNotifierItem AND TARGET KF6::WindowSystem)
+    list(APPEND SRCS
+        systemtrayicon.h
+        systemtrayicon.cpp
     )
-    
-    qt6_add_dbus_adaptor(SRCS
-        statusnotifier/org.kde.StatusNotifierItem.xml
-        statusnotifier/statusnotifieritem.h
-        StatusNotifierItem
+else()
+    ## Choose real or stub systemtray implementation depending on available libraries
+    list(APPEND SRCS
+        systemtrayicon.h
     )
+
+    if(KF6WindowSystem_FOUND OR KF6StatusNotifierItem_FOUND OR Qt6DBus_FOUND)
+        list(APPEND SRCS systemtrayicon.cpp)
+    else()
+        list(APPEND SRCS systemtrayicon_stub.cpp)
+    endif()
 endif()
+
+# Qt6 DBus 接口生成
+## DBus interface generation skipped
+# if(TARGET Qt6::DBus)
+#     qt6_add_dbus_interface(SRCS 
+#         org.kde.StatusNotifierWatcher.xml 
+#         statusnotifierwatcher_interface
+#     )
+#     
+#     qt6_add_dbus_adaptor(SRCS
+#         statusnotifier/org.kde.StatusNotifierItem.xml
+#         statusnotifier/statusnotifieritem.h
+#         StatusNotifierItem
+#     )
+# endif()
 
 add_library(cutefishplatformtheme MODULE ${SRCS})
 
@@ -65,29 +84,39 @@ target_compile_definitions(cutefishplatformtheme PRIVATE
     "QT_NO_FOREACH"
 )
 
+if(KF6WindowSystem_FOUND)
+    target_compile_definitions(cutefishplatformtheme PRIVATE HAVE_KWINDOWSYSTEM)
+endif()
+
 target_include_directories(cutefishplatformtheme PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${XCB_INCLUDE_DIRS}
     ${XCB_EWMH_INCLUDE_DIRS}
     ${X11_INCLUDE_DIRS}
-    ${Qt6XdgIconLoader_INCLUDE_DIRS}
+    /usr/include/x86_64-linux-gnu/qt6/QtGui/6.8.2
+    /usr/include/x86_64-linux-gnu/qt6/QtGui/6.8.2/QtGui
 )
 
 target_link_libraries(cutefishplatformtheme PRIVATE
     Qt6::Core
     Qt6::Widgets
     Qt6::Gui
-    Qt6::DBus
-    Qt6::QuickControls2
-    Qt6::CorePrivate  # 这会自动处理私有头文件路径
-    Qt6::GuiPrivate   # 这会自动处理私有头文件路径
-    KF6::WindowSystem
-    KF6::StatusNotifierItem
     ${XCB_LIBRARIES}
     ${XCB_EWMH_LIBRARIES}
     ${X11_LIBRARIES}
-    ${Qt6XdgIconLoader_LIBRARIES}
 )
+
+if(Qt6DBus_FOUND)
+    target_link_libraries(cutefishplatformtheme PRIVATE Qt6::DBus)
+endif()
+
+if(KF6WindowSystem_FOUND)
+    target_link_libraries(cutefishplatformtheme PRIVATE KF6::WindowSystem)
+endif()
+
+if(KF6StatusNotifierItem_FOUND)
+    target_link_libraries(cutefishplatformtheme PRIVATE KF6::StatusNotifierItem)
+endif()
 
 set_target_properties(cutefishplatformtheme PROPERTIES
     PREFIX ""
